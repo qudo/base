@@ -27,22 +27,37 @@ regelen. Resultaat:
 
 - ✅ **Portal-ID bevestigd:** `145441377` (EU-datacenter, `app-eu1.hubspot.com`,
   valuta EUR) — staat al ingevuld in `module.js` en de standalone versie.
-- ✅ **Gecontroleerd:** de 6 custom contact-properties (`scan_score_strategie` etc.)
-  bestaan nog niet in dit portal — die moet je dus nog aanmaken (stap 1 hieronder).
-- ⛔ **Formulieren en landingspagina's kon ik niet aanmaken via de koppeling.** De
-  connected app heeft geen scope voor landingspagina's/modules (die staat op
-  "requires reauthorization"), en het aanmaken van formulieren via de API is sowieso
-  niet beschikbaar voor deze integratie — alleen lezen zou kunnen na
-  heraut­orisatie, schrijven niet. Formulier en Form GUID blijven dus een
-  handmatige stap (2 minuten, zie stap 2).
-- ⛔ **Custom properties aanmaken** kan ook niet via deze koppeling — er is geen
-  tool/scope voor het schrijven van property-definities. Dat moet je dus zelf doen
-  in de HubSpot-UI (stap 1).
-
-Zeg het als je de connected app opnieuw wilt autoriseren met
-landingspagina-rechten — dan kan ik in elk geval bestaande formulieren voor je
-opzoeken en een landingspagina voor je inrichten, maar het écht aanmaken van het
-formulier zelf blijft hoe dan ook iets voor de HubSpot-UI.
+- ✅ **Landingspagina aangemaakt in je portal** (na reautorisatie): een concept
+  pagina "Gratis Quick Scan" op basis van je eigen `nxtfase-theme`, op
+  `nxtfase.hs-sites-eu1.com/quick-scan` (content-ID `430963027134`, **nog niet
+  gepubliceerd**). Hero, pijnpunten, aanpak-stappen en de diensten-sectie zijn al
+  ingevuld met scan-specifieke copy. Open 'm in de editor:
+  `https://app.hubspot.com/pages/145441377/editor/430963027134`
+- ⛔ **De interactieve scan zelf kon ik niet via de API op de pagina zetten.**
+  Alle manieren om custom HTML/CSS/JS via de landingspagina-API in te voegen
+  zijn door HubSpot zelf geblokkeerd: `@hubspot/raw_html` en `@hubspot/raw_jinja`
+  renderen niet vanuit een insert-actie ("content does not render from insert" —
+  een harde regel, geen bug), en `@hubspot/rich_text` knipt `<script>`- en
+  `<style>`-tags eruit. Dit is dus geen rechten-probleem maar een platformregel:
+  er bestaat geen API-pad om werkende custom JS op een pagina te krijgen. Je
+  moet de module daarom nog steeds handmatig via **Design Manager** uploaden
+  (stap 4) en op de pagina slepen — ik heb alvast een `id="quick-scan"` anchor
+  in de module gezet zodat de "Start de gratis Quick Scan"-knop in de hero er
+  automatisch naartoe scrollt zodra je 'm ergens op de pagina plaatst.
+- ⛔ **Formulieren aanmaken via de API is sowieso niet beschikbaar** voor deze
+  integratie, los van rechten. Wel kon ik je bestaande formulieren opzoeken —
+  je hebt al een paar formulieren (o.a. "NXTFASE CTA") en een Meetings-link,
+  maar geen daarvan heeft de scan-specifieke score-velden. Formulier en Form
+  GUID blijven dus een handmatige stap (2 minuten, zie stap 2).
+- ⛔ **Custom properties aanmaken** kan ook niet via deze koppeling — geverifieerd
+  dat de 6 custom properties (`scan_score_strategie` etc.) nog niet bestaan in dit
+  portal. Moet je zelf doen in de HubSpot-UI (stap 1).
+- ⚠️ **Geen browser-automatisering met een ingelogde HubSpot-sessie beschikbaar.**
+  Ik heb alleen een kale, niet-ingelogde headless browser (voor lokaal testen van
+  de standalone HTML) en een read-only webfetch-tool die geen ingelogde pagina's
+  kan laden — dus ik kan niet namens jou inloggen om het formulier of de
+  properties via de UI te klikken. Die twee stappen (1 en 2 hieronder) moet je
+  zelf in de HubSpot-UI doen.
 
 ## Stap 1 — Maak de contactproperties aan in HubSpot
 
@@ -100,7 +115,12 @@ posten — zo kun je de hele flow lokaal testen zonder live formulier.
 
 Upload de map `module/quick-scan.module/` via **Design Manager** (of met de HubSpot
 CLI: `hs upload module/quick-scan.module quick-scan.module`). Sleep de module
-vervolgens op een landingspagina of website-pagina.
+vervolgens op de pagina "Gratis Quick Scan"
+(`https://app.hubspot.com/pages/145441377/editor/430963027134`) op de plek waar
+"Start de gratis Quick Scan" naartoe moet scrollen — de module heeft al
+`id="quick-scan"`, dus de hero-knop werkt automatisch zodra hij ergens op die
+pagina staat. Publiceer de pagina pas nadat je `FORM_GUID` hebt ingevuld (stap 3),
+anders komen inzendingen niet in je CRM terecht.
 
 ## Lokaal testen
 
