@@ -9,8 +9,8 @@
   // ===================================================================
   // CONFIG — vul dit in voordat je live gaat
   // ===================================================================
-  var PORTAL_ID = 'PORTAL_ID'; // bv. '12345678'
-  var FORM_GUID = 'FORM_GUID'; // bv. 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+  var PORTAL_ID = '145441377'; // bevestigd via de gekoppelde HubSpot-account (portal-ID)
+  var FORM_GUID = 'FORM_GUID'; // bv. 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' — nog handmatig aan te maken, zie README
   var MEETING_URL = 'MEETING_URL'; // bv. 'https://meetings.hubspot.com/jouw-agenda'
   // ===================================================================
 

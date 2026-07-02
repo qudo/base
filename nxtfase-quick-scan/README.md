@@ -20,6 +20,30 @@ nxtfase-quick-scan/
 └── README.md
 ```
 
+## Status van je gekoppelde HubSpot-account
+
+Ik heb de gekoppelde HubSpot-account gebruikt om zo veel mogelijk automatisch te
+regelen. Resultaat:
+
+- ✅ **Portal-ID bevestigd:** `145441377` (EU-datacenter, `app-eu1.hubspot.com`,
+  valuta EUR) — staat al ingevuld in `module.js` en de standalone versie.
+- ✅ **Gecontroleerd:** de 6 custom contact-properties (`scan_score_strategie` etc.)
+  bestaan nog niet in dit portal — die moet je dus nog aanmaken (stap 1 hieronder).
+- ⛔ **Formulieren en landingspagina's kon ik niet aanmaken via de koppeling.** De
+  connected app heeft geen scope voor landingspagina's/modules (die staat op
+  "requires reauthorization"), en het aanmaken van formulieren via de API is sowieso
+  niet beschikbaar voor deze integratie — alleen lezen zou kunnen na
+  heraut­orisatie, schrijven niet. Formulier en Form GUID blijven dus een
+  handmatige stap (2 minuten, zie stap 2).
+- ⛔ **Custom properties aanmaken** kan ook niet via deze koppeling — er is geen
+  tool/scope voor het schrijven van property-definities. Dat moet je dus zelf doen
+  in de HubSpot-UI (stap 1).
+
+Zeg het als je de connected app opnieuw wilt autoriseren met
+landingspagina-rechten — dan kan ik in elk geval bestaande formulieren voor je
+opzoeken en een landingspagina voor je inrichten, maar het écht aanmaken van het
+formulier zelf blijft hoe dan ook iets voor de HubSpot-UI.
+
 ## Stap 1 — Maak de contactproperties aan in HubSpot
 
 Ga naar **Instellingen → Eigenschappen → Contacteigenschappen → Eigenschap maken** en
@@ -63,14 +87,14 @@ Open `module/quick-scan.module/module.js` (en optioneel ook
 vul bovenin in:
 
 ```js
-var PORTAL_ID = 'PORTAL_ID';   // → jouw portal ID, bv. '12345678'
-var FORM_GUID = 'FORM_GUID';   // → jouw form GUID
+var PORTAL_ID = '145441377';   // ✅ al ingevuld, bevestigd via de gekoppelde account
+var FORM_GUID = 'FORM_GUID';   // → nog in te vullen na stap 2
 var MEETING_URL = 'MEETING_URL'; // → link naar je HubSpot meetings-agenda voor de Quick Process Scan
 ```
 
-Zolang `PORTAL_ID`/`FORM_GUID` nog op de placeholder-tekst staan, simuleert het
-script een geslaagde inzending (met een `console.warn`) in plaats van echt naar
-HubSpot te posten — zo kun je de hele flow lokaal testen zonder live formulier.
+Zolang `FORM_GUID` nog op de placeholder-tekst staat, simuleert het script een
+geslaagde inzending (met een `console.warn`) in plaats van echt naar HubSpot te
+posten — zo kun je de hele flow lokaal testen zonder live formulier.
 
 ## Stap 4 — Upload de module
 
