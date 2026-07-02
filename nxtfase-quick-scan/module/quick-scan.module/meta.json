@@ -1,0 +1,14 @@
+{
+  "label": "NXTFASE Quick Scan",
+  "css_assets": [],
+  "external_js": [],
+  "global": false,
+  "help_text": "Gratis interactieve mini-scan (16 stellingen) die een lead vastlegt in HubSpot en doorverwijst naar de betaalde Quick Process Scan.",
+  "host_template_types": ["PAGE", "BLOG_LISTING", "BLOG_POST"],
+  "js_assets": [],
+  "other_assets": [],
+  "smart_type": "NOT_SMART",
+  "type": "module",
+  "content_types": ["LANDING_PAGE", "SITE_PAGE"],
+  "is_available_for_new_content": true
+}

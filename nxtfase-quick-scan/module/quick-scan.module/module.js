@@ -1,0 +1,388 @@
+/**
+ * NXTFASE Quick Scan
+ * Client-side interactive self-assessment. No backend, no HubSpot Operations Hub —
+ * everything runs in the browser and submits straight to the HubSpot Forms Submission API (v3).
+ */
+(function () {
+  'use strict';
+
+  // ===================================================================
+  // CONFIG — vul dit in voordat je live gaat
+  // ===================================================================
+  var PORTAL_ID = 'PORTAL_ID'; // bv. '12345678'
+  var FORM_GUID = 'FORM_GUID'; // bv. 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+  var MEETING_URL = 'MEETING_URL'; // bv. 'https://meetings.hubspot.com/jouw-agenda'
+  // ===================================================================
+
+  var HS_SUBMIT_URL =
+    'https://api.hsforms.com/submissions/v3/integration/submit/' + PORTAL_ID + '/' + FORM_GUID;
+
+  var CATEGORY_META = {
+    strategie: { label: 'Richting', field: 'scan_score_strategie' },
+    mensen: { label: 'Je team', field: 'scan_score_mensen' },
+    processen: { label: 'Hoe je werkt', field: 'scan_score_processen' },
+    systemen: { label: 'Je tools', field: 'scan_score_systemen' }
+  };
+  var CATEGORY_ORDER = ['strategie', 'mensen', 'processen', 'systemen'];
+  var MAX_PER_CATEGORY = 8; // 4 stellingen x 2 punten
+
+  var QUESTIONS = [
+    { id: 'strategie_1', category: 'strategie', text: 'Ik weet niet precies waar ik over twee jaar met mijn bedrijf wil staan.' },
+    { id: 'mensen_1', category: 'mensen', text: 'Nieuwe mensen inwerken kost me weken, want er staat niks op papier.' },
+    { id: 'processen_1', category: 'processen', text: 'Zondagavond zit ik nog in Excel om de zaak op orde te krijgen.' },
+    { id: 'systemen_1', category: 'systemen', text: 'Klantinfo staat bij mij verspreid over mail, WhatsApp en mijn hoofd.' },
+    { id: 'strategie_2', category: 'strategie', text: 'Ik neem beslissingen vooral op gevoel, niet op basis van cijfers.' },
+    { id: 'mensen_2', category: 'mensen', text: 'Als ik een dagje ziek ben, ligt er ergens iets stil.' },
+    { id: 'processen_2', category: 'processen', text: 'Dezelfde fout gebeurt bij mij steeds weer opnieuw.' },
+    { id: 'systemen_2', category: 'systemen', text: "Ik gebruik meerdere programma's die niks met elkaar delen." },
+    { id: 'strategie_3', category: 'strategie', text: 'Als iemand vraagt wat mijn bedrijf uniek maakt, moet ik even nadenken.' },
+    { id: 'mensen_3', category: 'mensen', text: 'Ik doe nog dingen zelf die iemand anders net zo goed zou kunnen doen.' },
+    { id: 'processen_3', category: 'processen', text: 'Offertes, facturen of planningen maak ik nog grotendeels met de hand.' },
+    { id: 'systemen_3', category: 'systemen', text: 'Ik ben regelmatig een tijd kwijt met het terugzoeken van bestanden.' },
+    { id: 'strategie_4', category: 'strategie', text: 'Ik weet niet precies welke klanten of klussen me het meeste opleveren.' },
+    { id: 'mensen_4', category: 'mensen', text: 'Mijn mensen weten niet altijd precies wat ik van ze verwacht.' },
+    { id: 'processen_4', category: 'processen', text: 'Ik kan niet zo snel uitleggen hoe een klus bij mij van start tot finish loopt.' },
+    { id: 'systemen_4', category: 'systemen', text: 'Als ik cijfers nodig heb, moet ik ze handmatig bij elkaar zoeken uit verschillende plekken.' }
+  ];
+
+  var ANSWER_OPTIONS = [
+    { value: 2, label: 'Klopt' },
+    { value: 1, label: 'Soms' },
+    { value: 0, label: 'Klopt niet' }
+  ];
+
+  var BANDS = [
+    {
+      max: 10,
+      title: 'Je zaak staat er goed voor',
+      body:
+        'Op de meeste vlakken loopt het bij jou al lekker. Eerlijk gezegd: misschien heb je mij (nu) niet nodig. ' +
+        'Bewaar deze uitslag gerust en kom terug zodra dat verandert.'
+    },
+    {
+      max: 21,
+      title: 'Er lekt tijd en geld weg op een paar plekken',
+      body:
+        'Het loopt niet vast, maar op een paar plekken kost het je nu al onnodig tijd, geld of nachtrust. ' +
+        'Hieronder zie je precies waar.'
+    },
+    {
+      max: 32,
+      title: 'Je verliest structureel avonden aan dingen die vanzelf zouden moeten gaan',
+      body:
+        'Dit is geen toeval, dit is een patroon. Op meerdere vlakken kost jouw bedrijf je meer energie dan nodig is.'
+    }
+  ];
+
+  function getBand(total) {
+    for (var i = 0; i < BANDS.length; i++) {
+      if (total <= BANDS[i].max) return BANDS[i];
+    }
+    return BANDS[BANDS.length - 1];
+  }
+
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function isConfigured() {
+    return PORTAL_ID !== 'PORTAL_ID' && FORM_GUID !== 'FORM_GUID';
+  }
+
+  function computeScores(answers) {
+    var scores = { strategie: 0, mensen: 0, processen: 0, systemen: 0, totaal: 0 };
+    QUESTIONS.forEach(function (q) {
+      var points = answers[q.id];
+      if (typeof points === 'number') {
+        scores[q.category] += points;
+        scores.totaal += points;
+      }
+    });
+    return scores;
+  }
+
+  function submitToHubSpot(payload) {
+    if (!isConfigured()) {
+      // PORTAL_ID / FORM_GUID zijn nog niet ingevuld: simuleer een geslaagde
+      // inzending zodat je de flow lokaal kan testen zonder live HubSpot-formulier.
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[NXTFASE Quick Scan] PORTAL_ID/FORM_GUID zijn nog placeholders — inzending wordt gesimuleerd, er is niets naar HubSpot verstuurd.',
+        payload
+      );
+      return Promise.resolve({ simulated: true });
+    }
+
+    return fetch(HS_SUBMIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      if (!res.ok) {
+        throw new Error('HubSpot submission failed with status ' + res.status);
+      }
+      return res.json().catch(function () {
+        return {};
+      });
+    });
+  }
+
+  function init(root) {
+    var state = {
+      screen: 'intro', // intro | quiz | email | results
+      index: 0,
+      answers: {},
+      submitting: false,
+      submitError: ''
+    };
+
+    render();
+
+    function render() {
+      if (state.screen === 'intro') return renderIntro();
+      if (state.screen === 'quiz') return renderQuiz();
+      if (state.screen === 'email') return renderEmail();
+      if (state.screen === 'results') return renderResults();
+    }
+
+    function renderIntro() {
+      root.innerHTML =
+        '<div class="nqs-card nqs-intro">' +
+        '<p class="nqs-eyebrow">Gratis &middot; minder dan 3 minuten</p>' +
+        '<h2 class="nqs-title">Hoe gezond is jouw bedrijf, echt?</h2>' +
+        '<p class="nqs-text">16 korte stellingen, geen jargon. Gewoon herkenbare dingen uit een gewone werkweek. ' +
+        'Aan het eind zie je precies waar het bij jou kan schuren &mdash; en waar niet.</p>' +
+        '<button type="button" class="nqs-btn nqs-btn-primary" data-action="start">Start de gratis Quick Scan</button>' +
+        '</div>';
+
+      root.querySelector('[data-action="start"]').addEventListener('click', function () {
+        state.screen = 'quiz';
+        state.index = 0;
+        render();
+      });
+    }
+
+    function renderQuiz() {
+      var q = QUESTIONS[state.index];
+      var total = QUESTIONS.length;
+      var pct = Math.round((state.index / total) * 100);
+      var categoryLabel = CATEGORY_META[q.category].label;
+      var selected = state.answers[q.id];
+
+      var answersHtml = ANSWER_OPTIONS.map(function (opt) {
+        var isSelected = selected === opt.value;
+        return (
+          '<button type="button" class="nqs-answer' +
+          (isSelected ? ' is-selected' : '') +
+          '" data-value="' +
+          opt.value +
+          '">' +
+          escapeHtml(opt.label) +
+          '</button>'
+        );
+      }).join('');
+
+      root.innerHTML =
+        '<div class="nqs-card">' +
+        '<div class="nqs-progress"><div class="nqs-progress-bar" style="width:' +
+        pct +
+        '%"></div></div>' +
+        '<p class="nqs-step">Vraag ' +
+        (state.index + 1) +
+        ' van ' +
+        total +
+        ' &middot; ' +
+        escapeHtml(categoryLabel) +
+        '</p>' +
+        '<h2 class="nqs-question">' +
+        escapeHtml(q.text) +
+        '</h2>' +
+        '<div class="nqs-answers">' +
+        answersHtml +
+        '</div>' +
+        '<button type="button" class="nqs-back" data-action="back">&larr; Vorige</button>' +
+        '</div>';
+
+      root.querySelectorAll('.nqs-answer').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var value = parseInt(btn.getAttribute('data-value'), 10);
+          state.answers[q.id] = value;
+          if (state.index < total - 1) {
+            state.index += 1;
+            render();
+          } else {
+            state.screen = 'email';
+            render();
+          }
+        });
+      });
+
+      var backBtn = root.querySelector('[data-action="back"]');
+      backBtn.addEventListener('click', function () {
+        if (state.index === 0) {
+          state.screen = 'intro';
+        } else {
+          state.index -= 1;
+        }
+        render();
+      });
+    }
+
+    function renderEmail() {
+      root.innerHTML =
+        '<div class="nqs-card">' +
+        '<p class="nqs-eyebrow">Bijna klaar</p>' +
+        '<h2 class="nqs-title">Waar wil je je resultaat zien?</h2>' +
+        '<p class="nqs-text">Vul je gegevens in, dan zie je meteen waar het bij jou lekt &mdash; en waar niet.</p>' +
+        '<form data-form novalidate>' +
+        '<label class="nqs-field">Voornaam*<input type="text" name="firstname" required></label>' +
+        '<label class="nqs-field">E-mailadres*<input type="email" name="email" required></label>' +
+        '<label class="nqs-field">Bedrijfsnaam<input type="text" name="company"></label>' +
+        '<p class="nqs-error" data-error hidden></p>' +
+        '<button type="submit" class="nqs-btn nqs-btn-primary" data-submit>Bekijk mijn resultaat</button>' +
+        '</form>' +
+        '<p class="nqs-privacy">Geen spam. Ik gebruik dit alleen om je resultaat te sturen en af en toe iets nuttigs te delen.</p>' +
+        '<button type="button" class="nqs-back" data-action="back">&larr; Terug naar de vragen</button>' +
+        '</div>';
+
+      root.querySelector('[data-action="back"]').addEventListener('click', function () {
+        state.screen = 'quiz';
+        state.index = QUESTIONS.length - 1;
+        render();
+      });
+
+      var form = root.querySelector('[data-form]');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (state.submitting) return;
+
+        var formData = new FormData(form);
+        var firstname = (formData.get('firstname') || '').toString().trim();
+        var email = (formData.get('email') || '').toString().trim();
+        var company = (formData.get('company') || '').toString().trim();
+        var errorEl = form.querySelector('[data-error]');
+
+        if (!firstname || !email) {
+          errorEl.textContent = 'Vul je voornaam en e-mailadres in.';
+          errorEl.hidden = false;
+          return;
+        }
+
+        var scores = computeScores(state.answers);
+        var answersCompact = {};
+        QUESTIONS.forEach(function (q) {
+          answersCompact[q.id] = state.answers[q.id];
+        });
+
+        var payload = {
+          fields: [
+            { name: 'email', value: email },
+            { name: 'firstname', value: firstname },
+            { name: 'company', value: company },
+            { name: 'scan_score_strategie', value: scores.strategie },
+            { name: 'scan_score_mensen', value: scores.mensen },
+            { name: 'scan_score_processen', value: scores.processen },
+            { name: 'scan_score_systemen', value: scores.systemen },
+            { name: 'scan_score_totaal', value: scores.totaal },
+            { name: 'scan_antwoorden', value: JSON.stringify(answersCompact) }
+          ],
+          context: {
+            hutk: getCookie('hubspotutk'),
+            pageUri: window.location.href,
+            pageName: document.title
+          }
+        };
+
+        state.submitting = true;
+        var submitBtn = form.querySelector('[data-submit]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Even geduld...';
+        errorEl.hidden = true;
+
+        submitToHubSpot(payload)
+          .then(function () {
+            state.submitting = false;
+            state.scores = scores;
+            state.screen = 'results';
+            render();
+          })
+          .catch(function (err) {
+            // eslint-disable-next-line no-console
+            console.error('[NXTFASE Quick Scan] submission error', err);
+            state.submitting = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Bekijk mijn resultaat';
+            errorEl.textContent = 'Er ging iets mis bij het versturen. Probeer het nog eens.';
+            errorEl.hidden = false;
+          });
+      });
+    }
+
+    function renderResults() {
+      var scores = state.scores || computeScores(state.answers);
+      var band = getBand(scores.totaal);
+
+      var barsHtml = CATEGORY_ORDER.map(function (cat) {
+        var meta = CATEGORY_META[cat];
+        var score = scores[cat];
+        var pct = Math.round((score / MAX_PER_CATEGORY) * 100);
+        var isHotspot = score >= MAX_PER_CATEGORY * 0.75;
+        return (
+          '<div class="nqs-bar-row">' +
+          '<div class="nqs-bar-label">' +
+          escapeHtml(meta.label) +
+          '</div>' +
+          '<div class="nqs-bar-track"><div class="nqs-bar-fill' +
+          (isHotspot ? ' is-hotspot' : '') +
+          '" style="width:' +
+          pct +
+          '%"></div></div>' +
+          '<div class="nqs-bar-score">' +
+          score +
+          '/' +
+          MAX_PER_CATEGORY +
+          '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      root.innerHTML =
+        '<div class="nqs-card">' +
+        '<p class="nqs-eyebrow">Jouw uitslag</p>' +
+        '<h2 class="nqs-title">' +
+        escapeHtml(band.title) +
+        '</h2>' +
+        '<p class="nqs-text">' +
+        escapeHtml(band.body) +
+        '</p>' +
+        '<div class="nqs-bars">' +
+        barsHtml +
+        '</div>' +
+        '<a class="nqs-btn nqs-btn-cta" href="' +
+        escapeHtml(MEETING_URL) +
+        '" target="_blank" rel="noopener">Plan de volledige Quick Scan (&euro;750)</a>' +
+        '<p class="nqs-cta-sub">Binnen 1 week weet je precies waar het lekt en wat je eraan doet.</p>' +
+        '</div>';
+    }
+  }
+
+  function boot() {
+    var roots = document.querySelectorAll('[data-nxtfase-quickscan]');
+    for (var i = 0; i < roots.length; i++) {
+      init(roots[i]);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
